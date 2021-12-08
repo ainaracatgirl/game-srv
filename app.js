@@ -1,4 +1,5 @@
 const WebSocket = require("ws").Server;
+const HttpServer = require('http').createServer;
 const HttpsServer = require('https').createServer;
 const fs = require("fs");
 
@@ -14,3 +15,7 @@ const wss = new WebSocket({ server });
 server.listen(443, () => {
     console.log(`Server listening on port 443`);
 });
+HttpServer((req, res) => {
+    res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url });
+    res.end();
+}).listen(80);
