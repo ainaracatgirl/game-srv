@@ -7,7 +7,7 @@ const server = HttpsServer({
     key: fs.readFileSync(process.env.GAME_SRV_KEY)
 }, (req, res) => {
     res.writeHead(200);
-    res.write(req.url);
+    res.end(req.url);
 });
 const wss = new WebSocket({ server });
 
