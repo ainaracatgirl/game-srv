@@ -8,8 +8,13 @@ const server = HttpsServer({
 })
 const wss = new WebSocket({ server });
 
-server.on('connection', (sock) => {
+server.on('connection', sock => {
     console.log("conn");
-})
+});
+server.on('error', err => {
+    console.error(err);
+});
 
-server.listen(443);
+server.listen(443, () => {
+    console.log(`Server listening on port 443`);
+});
