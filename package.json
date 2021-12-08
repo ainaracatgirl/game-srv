@@ -1,0 +1,19 @@
+{
+  "name": "game-srv",
+  "version": "1.0.0",
+  "description": "Game Server for jDev.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JanCraft/game-srv.git"
+  },
+  "author": "JanCraft",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/JanCraft/game-srv/issues"
+  },
+  "homepage": "https://github.com/JanCraft/game-srv#readme"
+}
