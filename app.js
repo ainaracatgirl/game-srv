@@ -6,7 +6,6 @@ const fs = require("fs");
 const uuid = require('uuid');
 const { createHash } = require('crypto');
 
-console.log(`${__dirname}/teddor_db.json`);
 const db = new JsonDB(`${__dirname}/teddor_db.json`);
 
 function generateAccessToken(username) {
@@ -62,6 +61,7 @@ app.get('/teddor/updatescore', authenticateToken, (req, res) => {
     res.sendStatus(200);
 });
 app.get('/teddor/topscores', authenticateToken, (req, res) => {
+    if (!db.exists('/scores/')) return res.json({});
     const all = db.getData('/scores/');
     const sortable = Object.entries(all)
         .sort(([,a],[,b]) => b-a)
