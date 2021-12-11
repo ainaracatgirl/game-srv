@@ -3,28 +3,25 @@ const HttpServer = require('http').createServer;
 const HttpsServer = require('https').createServer;
 const { JsonDB } = require('node-json-db');
 const fs = require("fs");
-const { createHash } = require('crypto'); 
-const jwt = require('jsonwebtoken');
-
-require('dotenv').config();
+const uuid = require('uuid');
+const { createHash } = require('crypto');
 
 const db = new JsonDB("teddor_db.json");
 
 function generateAccessToken(username) {
-    return jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '4h' });
+    const tok = uuid.v4();
+    db.push(`/tokens/${tok}`, username);
+    return tok;
 }
 
 function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = req.query.token;
   
     if (token == null) return res.sendStatus(401);
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+    if (!db.exists(`/tokens/${token}`)) return res.sendStatus(401);
     
-        req.user = user;
-        next();
-    });
+    req.user = db.getData(`/tokens/${token}`);
+    return next();
 }
 
 app.get('/teddor/auth', (req, res) => {
@@ -33,30 +30,35 @@ app.get('/teddor/auth', (req, res) => {
     const email = decodeURIComponent(req.query.email);
 
     if (!req.query.user || !req.query.passwd)
-        return res.status(400).json({ code: 400, message: "Missing query parameters" });
+        return res.sendStatus(400);
     
     const saltedHash = createHash('SHA-256').update(`${user}:${passwd}@teddor`).digest().toString('hex');
     const path = `/users/${user}`;
     if (db.exists(path)) {
         const data = db.getData(path);
         if (data.saltedHash !== saltedHash) {
-            return res.status(401).json({ code: 401, message: "Credentials incorrect" });
+            return res.sendStatus(401);
         }
     } else {
         if (req.query.email) {
             const userObj = { user, email, saltedHash };
             db.push(path, userObj);
         } else {
-            return res.status(400).json({ code: 400, message: "Missing query parameters" });
+            return res.sendStatus(400);
         }
     }
 
     const token = generateAccessToken(user);
-    res.json({ code: 200, message: 'Token generated. Expires in 4h.', token });
+    res.send(token);
 });
+app.get('/teddor/logout', (req, res) => {
+    if (!req.query.token) return res.sendStatus(400);
+    db.delete(`/tokens/${req.query.token}`);
+    res.sendStatus(200);
+})
 app.get('/teddor/updatescore', authenticateToken, (req, res) => {
-    db.push(`/scores/${req.user.username}`, parseInt(req.query.score));
-    res.json({ code: 200, message: 'Score updated.' });
+    db.push(`/scores/${req.user}`, parseInt(req.query.score));
+    res.sendStatus(200);
 });
 app.get('/teddor/topscores', authenticateToken, (req, res) => {
     const all = db.getData('/scores/');
