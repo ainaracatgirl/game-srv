@@ -6,7 +6,7 @@ const fs = require("fs");
 const uuid = require('uuid');
 const { createHash } = require('crypto');
 
-const db = new JsonDB("teddor_db.json");
+const db = new JsonDB(`${__dirname}/teddor_db.json`);
 
 function generateAccessToken(username) {
     const tok = uuid.v4();
