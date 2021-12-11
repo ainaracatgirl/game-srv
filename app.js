@@ -32,7 +32,7 @@ app.get('/teddor/auth', (req, res) => {
     if (!req.query.user || !req.query.passwd)
         return res.sendStatus(400);
     
-    const saltedHash = createHash('SHA-256').update(`${user}:${passwd}@teddor`).digest().toString('hex');
+    const saltedHash = createHash('sha256').update(`${user}:${passwd}@teddor`).digest().toString('hex');
     const path = `/users/${user}`;
     if (db.exists(path)) {
         const data = db.getData(path);
