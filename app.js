@@ -24,6 +24,14 @@ function authenticateToken(req, res, next) {
     return next();
 }
 
+function checkWeekly() {
+    let dow = new Date().getUTCDay();
+    if (!db.exists('/weekly') || dow < db.getData('/weekly')) {
+        db.push('/scores', {});
+    }
+    db.push('/weekly', dow);
+}
+
 app.get('/teddor/auth', (req, res) => {
     const user = decodeURIComponent(req.query.user).replace('/', '-');
     const passwd = decodeURIComponent(req.query.passwd);
@@ -79,6 +87,9 @@ const server = HttpsServer({
 server.listen(443, () => {
     console.log(`Server listening on port 443`);
 });
+
+checkWeekly();
+setInterval(checkWeekly, 4 * 3600 * 1000);
 
 HttpServer((req, res) => {
     res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url });
