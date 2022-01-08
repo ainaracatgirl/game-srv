@@ -5,6 +5,9 @@ const { JsonDB } = require('node-json-db');
 const fs = require("fs");
 const uuid = require('uuid');
 const { createHash } = require('crypto');
+const cors = require('cors');
+
+app.use(cors());
 
 const db = new JsonDB(`${__dirname}/teddor_db.json`);
 

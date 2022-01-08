@@ -106,3 +106,4 @@ dist
 package-lock.json
 teddor_db.json
 teddor_sprl/
+teddorview.html
