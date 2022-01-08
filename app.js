@@ -78,6 +78,33 @@ app.get('/teddor/topscores', authenticateToken, (req, res) => {
     
     res.json(sortable);
 });
+app.get('/teddor/sprl', authenticateToken, (req, res) => {
+    const path = `${__dirname}/teddor_sprl/${req.user}.sprl.log`;
+    if (!fs.existsSync(path)) {
+        fs.writeFileSync(path, Buffer.alloc(0));
+    }
+
+    const data = fs.readFileSync(path).subarray(0, 518400);
+    const newdat = Buffer.alloc(12);
+
+    newdat.writeInt32BE(parseInt(req.query.bstars), 0);
+    newdat.writeInt32BE(parseInt(req.query.xp), 4);
+    newdat.writeInt32BE(parseInt(req.query.lvl), 8);
+
+    const out = Buffer.concat([ data, newdat ]);
+    fs.writeFileSync(path, out);
+
+    res.sendStatus(200);
+});
+app.get('/teddor/getsprl', authenticateToken, (req, res) => {
+    const path = `${__dirname}/teddor_sprl/${req.query.user}.sprl.log`;
+    if (!fs.existsSync(path)) {
+        res.sendStatus(404);
+    }
+
+    const data = fs.readFileSync(path);
+    res.send(data.toString('base64'));
+});
 
 const server = HttpsServer({
     cert: fs.readFileSync(process.env.GAME_SRV_CERT),
