@@ -6,14 +6,35 @@ const fs = require("fs");
 const uuid = require('uuid');
 const { createHash } = require('crypto');
 const cors = require('cors');
+const fetch = require('node-fetch');
+const JWT = require('jsonwebtoken');
 
 app.use(cors());
-
 const db = new JsonDB(`${__dirname}/teddor_db.json`);
 
-function generateAccessToken(username) {
+async function validateJWT(jwt) {
+    const f = await fetch("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com");
+    const json = await f.json();
+    const keyid = JWT.decode(jwt, { complete: true }).header.kid;
+    const googlePem = json[keyid];
+
+    try {
+        const x = JWT.verify(jwt, googlePem, {
+            algorithms: [ "RS256" ],
+            audience: "jdev-es",
+            issuer: "https://securetoken.google.com/jdev-es"
+        });
+
+        return x;
+    } catch(err) {
+        return null;
+    }
+}
+
+function generateAccessToken(user) {
     const tok = uuid.v4();
-    db.push(`/tokens/${tok}`, username);
+    db.push(`/tokens/${tok}`, user);
+    db.save();
     return tok;
 }
 
@@ -27,15 +48,54 @@ function authenticateToken(req, res, next) {
     return next();
 }
 
+async function authMode1(req, res) {
+    if (!req.query.jwt) return res.sendStatus(400);
+    const val = await validateJWT(req.query.jwt);
+    if (!val) return res.sendStatus(401);
+
+    if (!db.exists(`/users/${val.sub}`)) {
+        db.push(`/users/${val.sub}`, { uid: val.sub, pic: val.picture, user: val.email.substr(0, val.email.indexOf('@')), email: val.email });
+        db.save();
+    }
+
+    const token = generateAccessToken(val.sub);
+    return res.send(token);
+}
+
 function checkWeekly() {
     let dow = new Date().getUTCDay();
     if (!db.exists('/weekly') || dow < db.getData('/weekly')) {
         db.push('/scores', {});
     }
     db.push('/weekly', dow);
+    db.save();
 }
 
+app.get('/teddor/migrate', async (req, res) => {
+    if (req.query.tddmigv == 1) {
+        if (req.query.jdevauth) {
+            const jwt = await validateJWT(req.query.jdevauth_id_token);
+            if (jwt) {
+                if (db.exists(`/users/${jwt.sub}`)) {
+                    return res.status(409).send(`This jDev Account has been already used for migration. You can contact support at <a href="mailto:support@jdev.com.es">support@jdev.com.es</a>`);
+                }
+                const tdduser = db.getData(`/users/${req.query.tdduser}`);
+                db.push(`/users/${jwt.sub}`, { migrated: 1, uid: jwt.sub, pic: jwt.picture, user: tdduser.user, email: jwt.email, old_email: tdduser.email });
+                db.save();
+                return res.status(200).send("Your account has been migrated successfully");
+            }
+        } else {
+            const migURL = `https://game.jdev.com.es/teddor/migrate?tdduser=${req.query.tdduser}&tddmigv=1`;
+            const url = `https://jdev.com.es/auth?redirect=${encodeURIComponent(migURL)}`;
+            return res.redirect(url);
+        }
+    }
+
+    return res.status(400).send(`Invalid or expired migration link. Please request a new one by replying to the email you received or by sending an email to <a href="mailto:support@jdev.com.es">support@jdev.com.es</a>`);
+});
+
 app.get('/teddor/auth', (req, res) => {
+    if (req.query.authmode == 1) return authMode1(req, res);
     const user = decodeURIComponent(req.query.user).replace('/', '-');
     const passwd = decodeURIComponent(req.query.passwd);
     const email = decodeURIComponent(req.query.email);
@@ -54,6 +114,7 @@ app.get('/teddor/auth', (req, res) => {
         if (req.query.email) {
             const userObj = { user, email, saltedHash };
             db.push(path, userObj);
+            db.save();
         } else {
             return res.sendStatus(400);
         }
@@ -65,10 +126,23 @@ app.get('/teddor/auth', (req, res) => {
 app.get('/teddor/logout', (req, res) => {
     if (!req.query.token) return res.sendStatus(400);
     db.delete(`/tokens/${req.query.token}`);
+    db.save();
     res.sendStatus(200);
-})
+});
+app.get('/teddor/revoketokens', (req, res) => {
+    if (!req.query.user) return res.sendStatus(400);
+    const toks = db.getData(`/tokens`);
+    for (const tok in toks) {
+        if (toks[tok] == req.query.user) delete toks[tok];
+    }
+    db.push(`/tokens`, toks);
+    db.save();
+    return res.sendStatus(200);
+});
 app.get('/teddor/updatescore', authenticateToken, (req, res) => {
-    db.push(`/scores/${req.user}`, parseInt(req.query.score));
+    const user = db.getData(`/users/${req.user}`).user;
+    db.push(`/scores/${user}`, parseInt(req.query.score));
+    db.save();
     res.sendStatus(200);
 });
 app.get('/teddor/topscores', authenticateToken, (req, res) => {
@@ -82,7 +156,9 @@ app.get('/teddor/topscores', authenticateToken, (req, res) => {
     res.json(sortable);
 });
 app.get('/teddor/sprl', authenticateToken, (req, res) => {
-    const path = `${__dirname}/teddor_sprl/${req.user}.sprl.log`;
+    const user = db.getData(`/users/${req.user}`).user;
+
+    const path = `${__dirname}/teddor_sprl/${user}.sprl.log`;
     if (!fs.existsSync(path)) {
         fs.writeFileSync(path, Buffer.alloc(0));
     }
